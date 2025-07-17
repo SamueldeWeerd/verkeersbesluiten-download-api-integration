@@ -1,0 +1,10 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+torch
+torchvision
+git+https://github.com/openai/CLIP.git
+Pillow
+numpy
+requests 
+pdf2image

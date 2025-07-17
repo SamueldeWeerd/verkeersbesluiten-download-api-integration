@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  koop-api-service:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_HOST=localhost
+      - API_PORT=8001
+      - API_PROTOCOL=http
+    volumes:
+      - ./afbeeldingen:/app/afbeeldingen
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--quiet", "-O", "/dev/null", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - n8n-network
+
+networks:
+  n8n-network:
+    external: true 
