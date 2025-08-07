@@ -274,7 +274,8 @@ def download_en_convert_pdf_bijlage(pdf_exb_code: str, besluit_id: str) -> str:
                 if should_download_image(img_bytes):
                     page.save(output_path, "PNG")
                     relative_path = f"afbeeldingen/{besluit_id}_page_1_bijlage.png"
-                    image_url = f"{get_api_base_url()}/{relative_path}"
+                    # image_url = f"{get_api_base_url()}/{relative_path}"
+                    image_url = f"/{relative_path}"
                     logging.info(f"✅ Saved first page (map/aerial photo): {image_url}")
                     return image_url
                 else:

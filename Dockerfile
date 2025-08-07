@@ -18,10 +18,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY CLIP_image_classifier.py .
-COPY api.py .
-COPY get_besluiten_for_date.py .
-COPY api_config.py .
+COPY src/ ./src/
+COPY tests/ ./tests/
 
 # Create directory for images
 RUN mkdir -p /app/afbeeldingen

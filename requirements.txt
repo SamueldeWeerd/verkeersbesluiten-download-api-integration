@@ -8,3 +8,6 @@ Pillow
 numpy
 requests 
 pdf2image
+pytest
+pytest-asyncio
+pydantic-settings
