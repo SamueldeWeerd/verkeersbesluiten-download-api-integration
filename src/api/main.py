@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import logging
 
-from src.api.routes import besluiten, health
+from src.api.routes import download_besluiten, health
 from src.config.settings import get_settings
 
 settings = get_settings()
@@ -42,7 +42,7 @@ app.include_router(
 )
 
 app.include_router(
-    besluiten.router,
+    download_besluiten.router,
     prefix="/besluiten",
     tags=["besluiten"]
 )

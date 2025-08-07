@@ -9,6 +9,21 @@ class GebiedsMarkeringModel(BaseModel):
 
 class VerkeersBesluitMetadata(BaseModel):
     """Model for verkeersbesluit metadata."""
+    bordcode: Optional[str] = Field(
+        None,
+        alias="OVERHEIDop.verkeersbordcode",
+        description="Traffic sign code (bordcode) for filtering and classification"
+    )
+    gemeente: Optional[str] = Field(
+        None,
+        alias="OVERHEID.authority",
+        description="Municipality/authority name (contains gemeente for municipal decisions)"
+    )
+    provincie: Optional[str] = Field(
+        None,
+        alias="DC.creator",
+        description="Province/authority name (contains provincie for provincial decisions)"
+    )
     gebiedsmarkering: Optional[List[GebiedsMarkeringModel]] = Field(
         None,
         alias="OVERHEIDop.gebiedsmarkering",
@@ -43,6 +58,9 @@ class VerkeersBesluitResponse(BaseModel):
                 "id": "gmb-2024-12345",
                 "text": "De burgemeester en wethouders van gemeente...",
                 "metadata": {
+                    "OVERHEIDop.verkeersbordcode": "C1",
+                    "OVERHEID.authority": "Amsterdam",
+                    "DC.creator": "Noord-Holland",
                     "OVERHEIDop.gebiedsmarkering": [
                         {
                             "type": "Lijn",

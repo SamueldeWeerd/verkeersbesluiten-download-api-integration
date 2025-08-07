@@ -1,24 +1,15 @@
-# CLIP Image Classifier API
+# Verkeersbesluiten API Integration
 
-A FastAPI service that provides a REST endpoint for classifying images using OpenAI's CLIP model. Determines whether images are maps, aerial/satellite images, or miscellaneous content.
+A FastAPI service that provides REST endpoints for retrieving and filtering traffic decisions (verkeersbesluiten) from the Dutch government's KOOP API. The service includes optional CLIP-based image classification to prevent downloading non-relevant images.
 
 ## 🚀 Quick Start with Docker
 
-### Build and run with Docker Compose (recommended):
 ```bash
+# Build and run with Docker Compose
 docker-compose up --build
 ```
 
-### Or build and run manually:
-```bash
-# Build the image
-docker build -t clip-classifier-api .
-
-# Run the container
-docker run -p 8000:8000 clip-classifier-api
-```
-
-The API will be available at: **http://localhost:8000**
+The API will be available at: **http://localhost:8001**
 
 ## 🔍 API Endpoints
 
@@ -26,188 +17,171 @@ The API will be available at: **http://localhost:8000**
 ```http
 GET /health
 ```
-Returns the health status of the API and CLIP model.
+Returns the health status of the API.
 
-### Classify Single Image
+### Get Traffic Decisions
 ```http
-POST /classify
-Content-Type: multipart/form-data
+GET /besluiten/{start_date_str}/{end_date_str}
+```
 
-file: <image_file>
+Retrieves traffic decisions for a given date range with optional filtering.
+
+**Parameters:**
+- `start_date_str`: Start date in YYYY-MM-DD format
+- `end_date_str`: End date in YYYY-MM-DD format
+- `bordcode_categories` (optional): Filter by traffic sign categories (A, C, D, F, G)
+- `provinces` (optional): Filter by Dutch provinces (case-insensitive)
+- `gemeenten` (optional): Filter by municipalities (case-insensitive)
+
+**Example Requests:**
+```bash
+# Get all decisions for a date range
+curl "http://localhost:8001/besluiten/2024-01-01/2024-01-02"
+
+# Filter by bordcode categories
+curl "http://localhost:8001/besluiten/2024-01-01/2024-01-02?bordcode_categories=A&bordcode_categories=C"
+
+# Filter by provinces
+curl "http://localhost:8001/besluiten/2024-01-01/2024-01-02?provinces=utrecht&provinces=gelderland"
+
+# Filter by municipalities
+curl "http://localhost:8001/besluiten/2024-01-01/2024-01-02?gemeenten=amsterdam&gemeenten=rotterdam"
+
+# Combine multiple filters
+curl "http://localhost:8001/besluiten/2024-01-01/2024-01-02?bordcode_categories=A&provinces=utrecht&gemeenten=amsterdam"
 ```
 
 **Response:**
 ```json
-{
-  "filename": "example.jpg",
-  "file_size_bytes": 156789,
-  "is_map_or_aerial": true,
-  "confidence": 0.87,
-  "classification": "maps",
-  "probabilities": {
-    "maps": 0.87,
-    "aerial_satellite": 0.08,
-    "miscellaneous": 0.05
-  },
-  "would_download": true,
-  "timestamp": "now"
-}
-```
-
-## 🧪 Testing the API
-
-### Interactive API Documentation
-Visit **http://localhost:8000/docs** for Swagger UI documentation where you can test endpoints directly.
-
-### Command Line Testing
-```bash
-# Test with the provided script
-python test_api.py path/to/your/image.jpg
-
-# Test with curl
-curl -X POST "http://localhost:8000/classify" \
-     -H "Content-Type: multipart/form-data" \
-     -F "file=@path/to/your/image.jpg"
-```
-
-### Python Client Example
-```python
-import requests
-
-# Single image classification
-with open('image.jpg', 'rb') as f:
-    files = {'file': ('image.jpg', f, 'image/jpeg')}
-    response = requests.post('http://localhost:8000/classify', files=files)
-    result = response.json()
-    
-print(f"Would download: {result['would_download']}")
-print(f"Classification: {result['classification']}")
-print(f"Confidence: {result['confidence']:.2f}")
+[
+  {
+    "id": "gmb-2024-12345",
+    "text": "De burgemeester en wethouders van gemeente...",
+    "metadata": {
+      "OVERHEIDop.verkeersbordcode": "C1",
+      "OVERHEID.authority": "Amsterdam",
+      "DC.creator": "Noord-Holland",
+      "OVERHEIDop.gebiedsmarkering": [
+        {
+          "type": "Lijn",
+          "geometrie": "POINT(4.8896 52.3740)",
+          "label": "Hoofdweg 123"
+        }
+      ],
+      "OVERHEIDop.externeBijlage": "exb-2024-67890",
+      "exb_code": "exb-2024-67890"
+    },
+    "images": [
+      "http://localhost:8001/afbeeldingen/exb-2024-67890_page_1_bijlage.png"
+    ]
+  }
+]
 ```
 
 ## ⚙️ Configuration
 
 ### Environment Variables
-- `PYTHONUNBUFFERED=1` - For real-time logging in Docker
+```yaml
+# API Settings
+VERKEERSBESLUIT_API__HOST=0.0.0.0
+VERKEERSBESLUIT_API__PORT=8000
+VERKEERSBESLUIT_API__PROTOCOL=http
 
-### Resource Requirements
-- **Memory**: ~2-4GB (depending on CLIP model and concurrent requests)
-- **CPU**: Multi-core recommended for better performance
-- **GPU**: Optional but significantly improves classification speed
+# Rate Limiting
+VERKEERSBESLUIT_RATE_LIMIT__REQUEST_TIMEOUT=30
+VERKEERSBESLUIT_RATE_LIMIT__CONNECT_TIMEOUT=10
+VERKEERSBESLUIT_RATE_LIMIT__MAX_RETRIES=3
+VERKEERSBESLUIT_RATE_LIMIT__MAX_RETRY_DELAY=10.0
 
-### Docker Image Size
-- **Base image**: ~1.5GB (includes PyTorch and CLIP model)
-- **Model download**: ~400MB on first run (cached afterward)
+# Logging
+VERKEERSBESLUIT_LOGGING__LEVEL=INFO
+```
 
-## 🔧 Development
+### Docker Network
+The service is configured to run on the `n8n-network` network, making it accessible to other containers as `koop-api-service:8001`.
 
-### Local Development (without Docker)
+## 📊 Performance & Features
+
+### Rate Limiting & Resilience
+- Adaptive rate limiting with exponential backoff
+- Automatic retries for failed requests
+- Configurable timeouts and retry limits
+
+### Filtering Capabilities
+- **Bordcode Categories**: Filter by traffic sign types (A, C, D, F, G)
+- **Provinces**: Filter by Dutch provinces (case-insensitive)
+- **Municipalities**: Filter by gemeente names (case-insensitive)
+- Early filtering before image processing for better performance
+
+### Image Processing
+- Automatic conversion of PDF attachments to images
+- CLIP model classification to identify maps and aerial photos
+  - Note: While another AI later in the workflow can also classify images, using CLIP here saves bandwidth and storage by preventing downloads of non-relevant images
+- Local storage of relevant images in `afbeeldingen/` directory
+
+### Logging
+- Detailed logging of processing steps
+- Filter application logging
+- Image classification decisions
+- Error and retry information
+
+## 🏗️ Project Structure
+
+```
+src/
+├── api/
+│   ├── main.py           # FastAPI application setup
+│   ├── models/           # Pydantic models
+│   └── routes/           # API endpoints
+├── services/
+│   └── besluit_download_service.py  # Core business logic
+├── utils/
+│   ├── filters.py        # Filter implementations
+│   ├── http_client.py    # Rate-limited HTTP client
+│   └── xml_parser.py     # XML processing utilities
+├── ml/
+│   └── clip_classifier.py # Image classification
+└── config/
+    └── settings.py       # Configuration management
+```
+
+## 🛠️ Development
+
+### Local Setup
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
 # Run locally
-uvicorn api:app --reload --host 0.0.0.0 --port 8000
+uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-### API Structure
-- `api.py` - FastAPI application with endpoints
-- `image_classifier.py` - CLIP classification logic
-- `requirements.txt` - Python dependencies
-- `Dockerfile` - Container definition
-- `docker-compose.yml` - Easy deployment configuration
-
-## 📊 Performance
-
-### Typical Response Times
-- **Single image**: 0.5-2 seconds (depending on image size and hardware)
-- **First request**: May take longer due to CLIP model loading
-
-### Limitations
-- **Maximum file size**: 50MB per image (configurable)
-- **Supported formats**: JPG, PNG, GIF, BMP, TIFF
-
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-**API won't start:**
-- Check if port 8000 is available
-- Ensure Docker has sufficient memory allocated (>4GB recommended)
-
-**Classification errors:**
-- Verify image format is supported
-- Check image file isn't corrupted
-- Ensure sufficient disk space for CLIP model
-
-**Slow performance:**
-- Use GPU-enabled Docker image for better performance
-- Reduce image resolution for faster processing
-- Consider increasing Docker memory allocation
-
-### Logs
-View container logs:
+### Docker Setup
 ```bash
-docker-compose logs -f clip-classifier
+# Build and run
+docker-compose up --build
+
+# View logs
+docker-compose logs -f koop-api-service
 ```
 
-## 🚀 Production Deployment
+## 📝 Notes
 
-### Scaling
-- Use multiple container instances behind a load balancer
-- Consider GPU-enabled instances for better performance
-- Implement request queuing for high-volume scenarios
+### CLIP Model Usage
+The service uses OpenAI's CLIP model to classify images as maps or aerial photos. While this classification could be done later in the workflow, performing it here offers several advantages:
 
-### Security
-- Add authentication middleware if needed
-- Implement rate limiting
-- Use HTTPS in production
-- Validate and sanitize file uploads
+1. **Storage Efficiency**: Only relevant images (maps/aerial photos) are saved
+2. **Bandwidth Optimization**: Prevents unnecessary downloads
+3. **Early Filtering**: Reduces downstream processing load
 
-### Monitoring
-- Health check endpoint: `/health`
-- Metrics can be added using Prometheus/Grafana
-- Log aggregation recommended for production use
+However, if your workflow already includes reliable image classification, you could consider removing the CLIP component to simplify the service.
 
-## Koop API Integration
+### Rate Limiting Strategy
+The service implements an adaptive rate-limiting strategy to respect API limits while maintaining good performance:
 
-The `koop_api_integratie.py` script includes the image classifier for filtering traffic decision images and attachments. It now uses a **daily request strategy** to handle large date ranges without hitting API limits.
+1. Base delay between requests (2 seconds)
+2. Exponential backoff on failures
+3. Success counter to gradually reduce delays
+4. Maximum retry and delay caps
 
-### Daily Request Structure
-
-Instead of making one large request for an entire date range, the system now:
-
-1. **Splits date ranges into individual days**: Each day gets its own API request
-2. **Processes daily batches**: Maximum 900 records per day (API limit per request)
-3. **Unlimited date ranges**: Can now process entire years without hitting limits
-4. **Progress tracking**: Shows progress through each day with detailed logging
-5. **Error resilience**: If one day fails, other days continue processing
-
-### Benefits
-
-- **No more 900-record limit**: Process unlimited date ranges
-- **Better error handling**: Isolated failures per day
-- **Progress visibility**: Clear progress reporting per day
-- **Optimal API usage**: Stays within API limits while maximizing throughput
-
-### Example Output
-
-```
-🚀 Starting download with daily requests and adaptive rate limiting
-📅 Processing 365 days from 2023-01-01 to 2023-12-31
-
-📅 Processing day 1/365: 2023-01-01
-📊 Found 23 records for 2023-01-01
-✅ Day 2023-01-01 completed: 23 documents processed
-
-📅 Processing day 2/365: 2023-01-02
-📊 Found 15 records for 2023-01-02
-✅ Day 2023-01-02 completed: 15 documents processed
-
-...
-
-🎉 Download completed!
-📅 Processed 365 days from 2023-01-01 to 2023-12-31
-📄 Total documents processed: 8,543
-📊 Average documents per day: 23.4
-``` 
+This ensures reliable operation even with large date ranges or high request volumes.

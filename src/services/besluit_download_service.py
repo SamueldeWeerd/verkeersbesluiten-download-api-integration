@@ -10,6 +10,7 @@ from src.config.settings import Settings, get_settings
 from src.utils.http_client import RateLimitedClient
 from src.utils.xml_parser import XMLParser
 from src.ml.clip_classifier import ImageClassifier
+from src.utils.filters import BordcodeCategory, check_bordcode_filter, check_province_filter, check_gemeente_filter, validate_provinces
 
 class BesluitService:
     """
@@ -33,26 +34,39 @@ class BesluitService:
         self._xml_parser = xml_parser or XMLParser()
         self._image_classifier = image_classifier or ImageClassifier(settings=self._settings)
     
-    def get_besluiten_for_date(self, date_str: str) -> List[Dict[str, Any]]:
+    def get_besluiten_for_date(
+        self, 
+        start_date_str: str, 
+        end_date_str: str,
+        bordcode_categories: Optional[List[BordcodeCategory]] = None,
+        provinces: Optional[List[str]] = None,
+        gemeenten: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Fetches and processes all verkeersbesluiten for a specific date.
+        Fetches and processes verkeersbesluiten for a specific date with optional filtering.
+        Filtering is applied BEFORE image processing for efficiency.
         
         Args:
-            date_str: Date in YYYY-MM-DD format
+            start_date_str: Start date in YYYY-MM-DD format
+            end_date_str: End date in YYYY-MM-DD format
+            bordcode_categories: Optional bordcode categories filter
+            provinces: Optional provinces filter
+            gemeenten: Optional municipalities filter
             
         Returns:
-            List of processed verkeersbesluit data
+            List of processed verkeersbesluit data (already filtered)
         """
         # Validate date format
         try:
-            datetime.strptime(date_str, "%Y-%m-%d")
+            datetime.strptime(start_date_str, "%Y-%m-%d")
+            datetime.strptime(end_date_str, "%Y-%m-%d")
         except ValueError:
             raise ValueError("Date must be in YYYY-MM-DD format (YYYY-MM-DD)")
         
         # Prepare SRU query
         query = self._settings.query_template.format(
-            date_start=date_str,
-            date_end=date_str,
+            date_start=start_date_str,
+            date_end=end_date_str,
             exclude_keywords=" ".join(self._settings.exclude_keywords)
         )
         
@@ -66,7 +80,7 @@ class BesluitService:
         
         response = self._http_client.get(str(self._settings.sru.base_url), params=params)
         if not response or not response.ok:
-            logging.warning(f"⚠️ Failed to get SRU data for {date_str}")
+            logging.warning(f"⚠️ Failed to get SRU data for {start_date_str} to {end_date_str}")
             return []
         
         # Parse response and extract records
@@ -78,6 +92,16 @@ class BesluitService:
         all_besluiten = []
         total_records = len(records)
         logging.info(f"📄 Processing {total_records} verkeersbesluit records...")
+        
+        # Log filter configuration
+        if bordcode_categories or provinces or gemeenten:
+            logging.info(
+                f"🔍 Applying filters - Bordcode categories: "
+                f"{[c.value for c in bordcode_categories] if bordcode_categories else None}, "
+                f"Provinces: {provinces}, Gemeenten: {gemeenten}"
+            )
+        else:
+            logging.info("📄 No filters applied - processing all records")
         
         for i, record in enumerate(records, 1):
             urls = self._xml_parser.extract_urls_from_record(record)
@@ -112,7 +136,26 @@ class BesluitService:
                         ET.fromstring(meta_response.content)
                     )
             
-            # Extract images
+            # Apply filters BEFORE expensive image processing
+            if bordcode_categories or provinces or gemeenten:
+                # Validate provinces if provided
+                if provinces:
+                    validate_provinces(provinces)
+                
+                # Check each filter - if any fails, skip this besluit
+                if not check_bordcode_filter(metadata, bordcode_categories, besluit_id):
+                    continue
+                    
+                if not check_province_filter(metadata, provinces, besluit_id):
+                    continue
+                    
+                if not check_gemeente_filter(metadata, gemeenten, besluit_id):
+                    continue
+                
+                # If we get here, the besluit passed all filters
+                logging.info(f"✅ {besluit_id}: Passed filters - proceeding with image processing")
+            
+            # Extract images (only for filtered besluiten)
             image_urls = []
             logging.info(f"🔍 {besluit_id}: Scanning for images...")
             
@@ -205,10 +248,9 @@ class BesluitService:
                 
                 first_page.save(output_path, "PNG")
                 
-                # Return the API-accessible URL
+                # Return the external API-accessible URL (for Docker network access)
                 relative_path = f"afbeeldingen/{output_filename}"
-                api_base_url = f"{self._settings.api.protocol}://{self._settings.api.host}:{self._settings.api.port}"
-                image_url = f"{api_base_url}/{relative_path}"
+                image_url = f"{self._settings.api.external_base_url}/{relative_path}"
                 
                 logging.info(f"✅ Saved first page (map/aerial photo): {image_url}")
                 return image_url

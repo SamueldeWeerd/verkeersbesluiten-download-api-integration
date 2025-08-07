@@ -8,13 +8,20 @@ from functools import lru_cache
 class APISettings(BaseModel):
     """API server configuration."""
     host: str = "localhost"
-    port: int = 8001
+    port: int = 8000
     protocol: str = "http"
+    # External service name for Docker network access (e.g., from N8N)
+    external_service_name: str = "koop-api-service"
 
     @property
     def base_url(self) -> str:
         """Constructs the base URL for the API service."""
         return f"{self.protocol}://{self.host}:{self.port}"
+    
+    @property
+    def external_base_url(self) -> str:
+        """Constructs the external base URL for Docker network access."""
+        return f"{self.protocol}://{self.external_service_name}:{self.port}"
 
 class DateRangeSettings(BaseModel):
     """Date range configuration for API queries."""
@@ -82,12 +89,13 @@ class Settings(BaseSettings):
     rate_limit: RateLimitSettings = RateLimitSettings()
     file: FileSettings = FileSettings()
     logging: LoggingSettings = LoggingSettings()
+    # TODO: Add more keywords to exclude
     exclude_keywords: List[str] = [
-        "parkeerplaats", "laadpaal", "gehandicapt", "oplaadpunt",
-        "parkeerverbod", "parkeervergunning", "parkeerregime",
-        "parkeermogelijkheden", "parkeervoorzieningen",
-        "parkeersituatie", "parkeersituaties", "parkeerplaatsen",
-        "parkeerplaatsvoorzieningen"
+        # "parkeerplaats", "laadpaal", "gehandicapt", "oplaadpunt",
+        # "parkeerverbod", "parkeervergunning", "parkeerregime",
+        # "parkeermogelijkheden", "parkeervoorzieningen",
+        # "parkeersituatie", "parkeersituaties", "parkeerplaatsen",
+        # "parkeerplaatsvoorzieningen"
     ]
     query_template: str = """(c.product-area==officielepublicaties AND 
         dt.modified>={date_start} AND dt.modified<={date_end} AND 
