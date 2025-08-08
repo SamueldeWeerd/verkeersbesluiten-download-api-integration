@@ -12,6 +12,8 @@ class APISettings(BaseModel):
     protocol: str = "http"
     # External service name for Docker network access (e.g., from N8N)
     external_service_name: str = "koop-api-service"
+    # External base URL for browser/external access
+    external_base_url_override: str = ""
 
     @property
     def base_url(self) -> str:
@@ -20,8 +22,10 @@ class APISettings(BaseModel):
     
     @property
     def external_base_url(self) -> str:
-        """Constructs the external base URL for Docker network access."""
-        return f"{self.protocol}://{self.host}:{self.port}"
+        """Constructs the external base URL for external access."""
+        if self.external_base_url_override:
+            return self.external_base_url_override
+        return f"{self.protocol}://{self.external_service_name}:{self.port}"
 
 class DateRangeSettings(BaseModel):
     """Date range configuration for API queries."""
