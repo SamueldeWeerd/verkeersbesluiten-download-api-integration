@@ -21,7 +21,7 @@ class APISettings(BaseModel):
     @property
     def external_base_url(self) -> str:
         """Constructs the external base URL for Docker network access."""
-        return f"{self.protocol}://{self.external_service_name}:{self.port}"
+        return f"{self.protocol}://{self.host}:{self.port}"
 
 class DateRangeSettings(BaseModel):
     """Date range configuration for API queries."""
